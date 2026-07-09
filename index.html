@@ -751,7 +751,7 @@ document.getElementById('zipBtn').onclick = async () => {
     }
   }
 
-  const zipBlob = await zip.generateAsync({type:'blob'});
+const zipBlob = await zip.generateAsync({type:'blob', compression:'STORE'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(zipBlob);
   a.download = 'broll_bundle.zip';
