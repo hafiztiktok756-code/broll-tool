@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Reel Stock — Script to B-Roll</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root{
+    --bg:#15171A; --panel:#1D2023; --panel-2:#25282C; --line:#33373C;
+    --text:#ECEAE4; --muted:#8B9096;
+    --tally:#FF5A36; --tally-dim:#7A3325;
+    --ready:#3DDC97; --ready-dim:#1E4A3A;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;padding:40px 20px 100px;}
+  .wrap{max-width:780px;margin:0 auto;}
+
+  .slate{display:flex;align-items:center;gap:14px;margin-bottom:6px;}
+  .slate-bars{width:34px;height:22px;background:repeating-linear-gradient(115deg,#fff 0 6px,#111 6px 12px);border-radius:3px;flex-shrink:0;}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.14em;color:var(--tally);text-transform:uppercase;}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;letter-spacing:-.01em;margin:10px 0 8px;line-height:1.08;}
+  .sub{color:var(--muted);font-size:15px;line-height:1.55;max-width:56ch;margin-bottom:18px;}
+  .free-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(61,220,151,.08);border:1px solid var(--ready-dim);color:var(--ready);font-family:'JetBrains Mono',monospace;font-size:11.5px;padding:7px 12px;border-radius:20px;margin-bottom:28px;}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px;margin-bottom:22px;}
+  .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:10px;}
+  .card-title{display:flex;align-items:center;gap:10px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;}
+  .slate-num{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--bg);background:var(--text);width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .hint{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);}
+
+  .key-row{display:flex;gap:10px;align-items:center;}
+  input[type=password],input[type=text],textarea,select{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:6px;
+    font-family:'JetBrains Mono',monospace;font-size:13px;padding:11px 13px;width:100%;outline:none;
+  }
+  input::placeholder,textarea::placeholder{color:#5A5F64;font-family:'Inter',sans-serif;}
+  input:focus,textarea:focus,select:focus{border-color:var(--tally);}
+  .btn{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;border:none;border-radius:6px;padding:11px 18px;cursor:pointer;white-space:nowrap;transition:transform .12s ease,opacity .12s ease;}
+  .btn:active{transform:scale(.97);}
+  .btn-ghost{background:var(--panel-2);color:var(--text);border:1px solid var(--line);}
+  .btn-main{background:var(--tally);color:#1A0C08;}
+  .btn-main:disabled{opacity:.4;cursor:not-allowed;}
+  .key-status{font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:10px;display:flex;align-items:center;gap:7px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+  .dot.on{background:var(--ready);box-shadow:0 0 8px var(--ready);}
+  .dot.off{background:var(--tally);box-shadow:0 0 8px var(--tally);}
+  .key-link{color:var(--tally);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:11px;}
+  .key-link:hover{text-decoration:underline;}
+  .optional-key{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);}
+
+  .niche-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .niche{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:16px 8px;text-align:center;cursor:pointer;user-select:none;}
+  .niche .ic{font-size:20px;display:block;margin-bottom:6px;}
+  .niche .lb{font-size:12px;color:var(--muted);}
+  .niche.active{border-color:var(--tally);background:rgba(255,90,54,.08);}
+  .niche.active .lb{color:var(--text);}
+
+  .subniche-wrap{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);}
+  .subniche-grid{display:flex;flex-wrap:wrap;gap:8px;}
+  .sub-chip{background:var(--panel-2);border:1px solid var(--line);border-radius:20px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--muted);}
+  .sub-chip.active{border-color:var(--ready);color:var(--text);background:rgba(61,220,151,.08);}
+
+  label.field-label{display:block;font-size:12px;color:var(--muted);margin:0 0 8px;}
+  textarea{min-height:170px;resize:vertical;line-height:1.6;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;}
+
+  .estimate{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+  .estimate .num{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--tally);}
+  .estimate .lb{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+  .estimate .warn{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--tally);width:100%;}
+
+  .collect-btn{width:100%;margin-top:18px;padding:14px;font-size:14px;background:var(--tally);color:#1A0C08;display:flex;align-items:center;justify-content:center;gap:8px;}
+  .resume-btn{width:100%;margin-top:10px;padding:13px;background:var(--ready);color:#082A1D;display:none;}
+
+  .console{margin-top:14px;background:#101214;border:1px solid var(--line);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#8FE0B8;padding:12px 14px;max-height:170px;overflow-y:auto;}
+  .console div{padding:1px 0;color:var(--muted);}
+  .console div.ok{color:var(--ready);}
+  .console div.tag{color:var(--tally);}
+
+  .rail{display:flex;justify-content:space-between;position:relative;margin:24px 0 4px;}
+  .rail::before{content:'';position:absolute;top:11px;left:0;right:0;height:2px;background:var(--line);z-index:0;}
+  .rail .fill{position:absolute;top:11px;left:0;height:2px;background:var(--tally);z-index:1;transition:width .4s ease;}
+  .step{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;}
+  .step .node{width:24px;height:24px;border-radius:50%;background:var(--panel-2);border:2px solid var(--line);}
+  .step.done .node{background:var(--tally);border-color:var(--tally);}
+  .step .lb{font-size:11px;color:var(--muted);text-align:center;font-family:'JetBrains Mono',monospace;}
+  .step.done .lb{color:var(--text);}
+
+  .scenes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px;}
+  .scene{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .scene img{width:100%;aspect-ratio:16/10;object-fit:cover;display:block;background:#000;}
+  .scene .meta{padding:10px 12px;}
+  .scene .sc-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--tally);letter-spacing:.06em;}
+  .scene .kw{font-size:12.5px;color:var(--text);margin:4px 0 8px;line-height:1.3;}
+  .scene a.dl{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ready);text-decoration:none;}
+  .scene a.dl:hover{text-decoration:underline;}
+  .zip-btn{width:100%;margin-top:16px;padding:13px;background:var(--ready);color:#082A1D;}
+  .empty-note{color:var(--muted);font-size:12.5px;font-family:'JetBrains Mono',monospace;text-align:center;padding:20px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="slate"><div class="slate-bars"></div><span class="eyebrow">REEL STOCK — B-ROLL PIPELINE</span></div>
+  <h1>Script in.<br>Numbered footage out.</h1>
+  <p class="sub">Paste a full script, pick a niche, and pull matched stock video for every beat — bundled and numbered like dailies from an edit bay. Built for long-form scripts too.</p>
+  <div class="free-badge">● both footage sources below are free forever — no card, no payment</div>
+
+  <!-- KEYS -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="hint">KEY</span> Pexels API Key</div>
+      <a class="key-link" href="https://www.pexels.com/api/" target="_blank">get free key ↗</a>
+    </div>
+    <div class="key-row">
+      <input type="password" id="apiKey" placeholder="Paste your Pexels API key">
+      <button class="btn btn-ghost" id="toggleKey">show</button>
+      <button class="btn btn-main" id="submitKey">Submit</button>
+    </div>
+    <div class="key-status"><span class="dot" id="keyDot"></span><span id="keyMsg">No key submitted yet.</span></div>
+    <button class="btn btn-ghost" id="testKeyBtn" style="width:100%;margin-top:10px;">🔧 Test key & connection</button>
+    <div class="key-status" id="testResult" style="display:none;"></div>
+
+    <div class="optional-key">
+      <div class="card-head" style="margin-bottom:10px;">
+        <div class="card-title"><span class="hint">OPTIONAL</span> Pixabay API Key</div>
+        <a class="key-link" href="https://pixabay.com/api/docs/" target="_blank">get free key ↗</a>
+      </div>
+      <div class="key-row">
+        <input type="password" id="pixKey" placeholder="Paste your Pixabay key (fallback source, also free)">
+        <button class="btn btn-ghost" id="togglePix">show</button>
+      </div>
+      <div class="key-status"><span class="hint">Used automatically when Pexels has no match, and to spread out requests across a long script so you don't hit the hourly free-tier limit as fast.</span></div>
+    </div>
+
+    <div class="optional-key">
+      <div class="card-head" style="margin-bottom:10px;">
+        <div class="card-title"><span class="hint">OPTIONAL</span> Jamendo Client ID (background music)</div>
+        <a class="key-link" href="https://developer.jamendo.com/v3.0" target="_blank">get free key ↗</a>
+      </div>
+      <div class="key-row">
+        <input type="password" id="jamKey" placeholder="Paste your Jamendo Client ID (free, no card)">
+        <button class="btn btn-ghost" id="toggleJam">show</button>
+      </div>
+      <div class="key-status"><span class="hint">Jamendo has 600K+ Creative Commons tracks with a real public search API. (Pixabay does not expose a music API — only images/videos — so it isn't used here for music.)</span></div>
+    </div>
+  </div>
+
+  <!-- NICHE -->
+  <div class="card">
+    <div class="card-head"><div class="card-title"><span class="slate-num">1</span> Choose your niche</div><span class="hint">biases search context</span></div>
+    <div class="niche-grid" id="nicheGrid"></div>
+    <div class="subniche-wrap" id="subnicheWrap" style="display:none;">
+      <label class="field-label" id="subnicheLabel">Sub-niche</label>
+      <div class="subniche-grid" id="subnicheGrid"></div>
+    </div>
+  </div>
+
+  <!-- SCRIPT -->
+  <div class="card">
+    <div class="card-head"><div class="card-title"><span class="slate-num">2</span> Add your script</div></div>
+    <label class="field-label">Video title / topic (optional — improves matching)</label>
+    <input type="text" id="videoTitle" placeholder="e.g. 5 Habits That Burn Fat Fast" style="margin-bottom:16px;">
+    <label class="field-label">Your script</label>
+    <textarea id="script" placeholder="Paste your full script here — long-form (20-25 min) scripts are fully supported."></textarea>
+
+    <div class="grid2">
+      <div>
+        <label class="field-label">Sentences per B-Roll</label>
+        <select id="sentGroup">
+          <option value="1">1 sentence (max B-rolls)</option>
+          <option value="2" selected>2 sentences</option>
+          <option value="3">3 sentences</option>
+          <option value="4">4 sentences (long-form friendly)</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Quality</label>
+        <select id="quality"><option value="hd">HD</option><option value="sd">SD</option></select>
+      </div>
+    </div>
+
+    <div class="estimate">
+      <span class="lb">Estimated B-Rolls</span>
+      <span><span class="num" id="estCount">0</span> <span class="hint" style="text-transform:none;">groups</span></span>
+      <span class="warn" id="rateWarn" style="display:none;"></span>
+    </div>
+
+    <div class="optional-key" style="margin-top:16px;">
+      <label class="key-status" style="cursor:pointer;">
+        <input type="checkbox" id="includeMusic" style="width:16px;height:16px;">
+        <span>🎵 Include background music track in ZIP (Jamendo, Creative Commons)</span>
+      </label>
+      <div class="grid2" id="musicMoodWrap" style="margin-top:10px;display:none;">
+        <div>
+          <label class="field-label">Mood</label>
+          <select id="moodOverride">
+            <option value="auto" selected>Auto (matches niche)</option>
+            <option value="cinematic epic">Cinematic / Epic</option>
+            <option value="uplifting inspiring">Uplifting / Inspiring</option>
+            <option value="calm ambient">Calm / Ambient</option>
+            <option value="corporate">Corporate / Neutral</option>
+            <option value="dark suspense">Dark / Suspense</option>
+            <option value="emotional sad">Emotional</option>
+            <option value="lofi chill">Lo-fi / Chill</option>
+            <option value="energetic upbeat">Energetic / Upbeat</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Track count</label>
+          <select id="musicCount">
+            <option value="1" selected>1 track</option>
+            <option value="2">2 tracks</option>
+            <option value="3">3 tracks</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn collect-btn" id="collectBtn">🎬 Collect B-Rolls</button>
+    <button class="btn resume-btn" id="resumeBtn">▶ Resume fetching</button>
+    <button class="btn resume-btn" id="retryFailedBtn" style="background:var(--tally);color:#1A0C08;">🔁 Retry failed scenes</button>
+    <div class="console" id="consoleLog"></div>
+  </div>
+
+  <div class="card" id="pipelineCard" style="display:none;">
+    <div class="card-head"><div class="card-title">Processing your script</div><span class="hint" id="pipelineMeta">0 segments</span></div>
+    <div class="rail">
+      <div class="fill" id="railFill" style="width:0%;"></div>
+      <div class="step" id="step0"><div class="node"></div><div class="lb">Splitting<br>Script</div></div>
+      <div class="step" id="step1"><div class="node"></div><div class="lb">Extracting<br>Keywords</div></div>
+      <div class="step" id="step2"><div class="node"></div><div class="lb">Fetching<br>B-Rolls</div></div>
+      <div class="step" id="step3"><div class="node"></div><div class="lb">Building<br>ZIP</div></div>
+    </div>
+  </div>
+
+  <div class="card" id="resultsCard" style="display:none;">
+    <div class="card-head"><div class="card-title">Scenes</div><span class="hint" id="resultsMeta"></span></div>
+    <div class="scenes" id="scenesGrid"></div>
+    <button class="btn zip-btn" id="zipBtn">⬇ Download all as ZIP</button>
+  </div>
+
+</div>
+
+<script>
+/* ---------- NICHES ---------- */
+const NICHES = [
+  ['💰','Finance'],['🤖','Tech / AI'],['❤️','Health'],
+  ['🏠','Real Estate'],['🔥','Motivation'],['🕌','Islamic'],
+  ['📚','Education'],['💼','Business'],['💪','Fitness'],
+  ['🍱','Food'],['✈️','Travel'],['🔭','Discovery'],
+  ['📖','Storytelling'],['🌟','Celebrity'],['🚔','True Crime'],
+  ['👶','Parenting'],['🐾','Pets & Animals'],['🎮','Gaming'],
+  ['⚽','Sports'],['💄','Beauty & Skincare'],['🛠️','DIY & Home'],
+  ['🚗','Automotive'],['🧠','Psychology / Self-Improvement'],['🏛️','Stoicism'],
+  ['💔','Relationships'],['🧘','Spirituality & Meditation'],
+  ['🎖️','War & Military History'],['🌪️','Natural Disasters'],
+  ['💎','Luxury Lifestyle'],['👗','Fashion & Style'],
+  ['📰','News & Current Affairs'],['🎧','ASMR & Relaxation'],
+  ['₿','Crypto & Investing'],
+  ['🎬','General']
+];
+/* Niches that expose a secondary sub-niche picker */
+const SUBNICHES = {
+  'Discovery': ['Rocket Launches','Astronauts & ISS','Mars & Rovers','Earth from Space','Moon & Artemis','Deep Space & Telescopes','Ocean','Wildlife','Nature','History','Archaeology','Science','Mystery','DNA & Genetics','Ancient Civilizations','Unexplained Phenomena'],
+  'War & Military History': ['World War I','World War II','Modern Warfare & Geopolitics','Soldier Stories'],
+  'Natural Disasters': ['Hurricanes','Earthquakes','Volcanoes','Tornadoes','Tsunamis'],
+  'Celebrity': ['USA Celebrity','UK Celebrity','European Celebrity','German Celebrity']
+};
+
+let niche = 'General';
+let subniche = null;
+
+const nicheGrid = document.getElementById('nicheGrid');
+NICHES.forEach(([ic,lb])=>{
+  const div = document.createElement('div');
+  div.className = 'niche' + (lb==='General' ? ' active' : '');
+  div.innerHTML = `<span class="ic">${ic}</span><span class="lb">${lb}</span>`;
+  div.onclick = () => {
+    document.querySelectorAll('.niche').forEach(n=>n.classList.remove('active'));
+    div.classList.add('active');
+    niche = lb;
+    const subWrap = document.getElementById('subnicheWrap');
+    if (SUBNICHES[lb]) {
+      subWrap.style.display = 'block';
+      document.getElementById('subnicheLabel').textContent = lb + ' sub-niche';
+      renderSubniches(lb);
+    } else {
+      subWrap.style.display = 'none';
+      subniche = null;
+    }
+    updateEstimate();
+  };
+  nicheGrid.appendChild(div);
+});
+const subGrid = document.getElementById('subnicheGrid');
+function renderSubniches(lb){
+  subGrid.innerHTML = '';
+  const list = SUBNICHES[lb];
+  subniche = list[0];
+  list.forEach(s=>{
+    const chip = document.createElement('div');
+    chip.className = 'sub-chip' + (s===list[0] ? ' active' : '');
+    chip.textContent = s;
+    chip.onclick = () => {
+      document.querySelectorAll('.sub-chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      subniche = s;
+    };
+    subGrid.appendChild(chip);
+  });
+}
+
+/* ---------- KEYS ---------- */
+let apiKey = '';
+let pixKey = '';
+let jamKey = '';
+const keyInput = document.getElementById('apiKey');
+const pixInput = document.getElementById('pixKey');
+const jamInput = document.getElementById('jamKey');
+document.getElementById('toggleKey').onclick = (e) => { keyInput.type = keyInput.type==='password'?'text':'password'; e.target.textContent = keyInput.type==='password'?'show':'hide'; };
+document.getElementById('togglePix').onclick = (e) => { pixInput.type = pixInput.type==='password'?'text':'password'; e.target.textContent = pixInput.type==='password'?'show':'hide'; };
+document.getElementById('toggleJam').onclick = (e) => { jamInput.type = jamInput.type==='password'?'text':'password'; e.target.textContent = jamInput.type==='password'?'show':'hide'; };
+jamInput.addEventListener('input', () => { jamKey = jamInput.value.trim(); });
+document.getElementById('includeMusic').addEventListener('change', (e) => {
+  document.getElementById('musicMoodWrap').style.display = e.target.checked ? 'grid' : 'none';
+});
+document.getElementById('submitKey').onclick = () => {
+  apiKey = keyInput.value.trim();
+  pixKey = pixInput.value.trim();
+  const dot = document.getElementById('keyDot');
+  const msg = document.getElementById('keyMsg');
+  if (apiKey.length > 10) {
+    dot.className = 'dot on';
+    msg.textContent = pixKey.length > 10 ? 'Both keys set — dual-source fetching enabled.' : 'Pexels key set — ready to collect B-Rolls.';
+  } else {
+    dot.className = 'dot off';
+    msg.textContent = "That doesn't look like a valid Pexels key.";
+  }
+};
+
+document.getElementById('testKeyBtn').onclick = async () => {
+  const result = document.getElementById('testResult');
+  result.style.display = 'flex';
+  result.innerHTML = '<span class="dot"></span><span>Testing...</span>';
+  const testKeyVal = keyInput.value.trim();
+  if (!testKeyVal || testKeyVal.length < 10) {
+    result.innerHTML = '<span class="dot off"></span><span>Paste a key first.</span>';
+    return;
+  }
+  try {
+    const res = await fetch(`https://api.pexels.com/videos/search?query=nature&per_page=1`, { headers: { Authorization: testKeyVal } });
+    if (res.status === 200) {
+      const data = await res.json();
+      const hasVideo = data.videos && data.videos.length > 0;
+      result.innerHTML = `<span class="dot on"></span><span>Key + connection both work${hasVideo ? ' — test clip found.' : ', but no clip matched "nature" (unusual).'}</span>`;
+    } else if (res.status === 401 || res.status === 403) {
+      result.innerHTML = '<span class="dot off"></span><span>Key rejected (401/403) — it may be wrong, revoked, or not yet approved. Re-check it on your Pexels dashboard.</span>';
+    } else if (res.status === 429) {
+      result.innerHTML = '<span class="dot off"></span><span>Rate-limited right now (429) — wait a bit and test again.</span>';
+    } else {
+      result.innerHTML = `<span class="dot off"></span><span>Unexpected response: HTTP ${res.status}.</span>`;
+    }
+  } catch (err) {
+    result.innerHTML = `<span class="dot off"></span><span>Network/CORS error ("${err.message}") — the request never reached Pexels. Check your internet connection, or try opening this tool from its shared link instead of a locally saved copy.</span>`;
+  }
+};
+
+/* ---------- VISUAL KEYWORD DICTIONARIES ----------
+   Maps abstract / spoken-language words to concrete, searchable visual terms,
+   per niche (and per Discovery sub-niche + Storytelling). This is the core
+   "smart matching" layer sitting on top of plain keyword extraction. */
+const DICTS = {
+  'Finance': {fat:'',debt:'debt paperwork stress',invest:'stock market chart',save:'piggy bank savings',rich:'wealth luxury money',poor:'empty wallet',budget:'budget planning notebook',tax:'tax documents calculator',stock:'stock market trading floor',crypto:'cryptocurrency bitcoin coin',bank:'bank building vault',loan:'loan contract signing',profit:'money growth chart',market:'stock exchange screen',salary:'paycheck office desk',economy:'city financial district'},
+  'Tech / AI': {ai:'artificial intelligence robot',robot:'robot machine',data:'server data center',code:'programmer coding screen',algorithm:'computer code screen',future:'futuristic technology city',startup:'startup office team',software:'laptop software screen',internet:'network cables server',phone:'smartphone hands',chip:'computer processor chip',cyber:'cybersecurity hacker screen',machine:'machine learning computer'},
+  'Health': {fat:'body fat measuring',protein:'protein meal healthy food',muscle:'muscle gym workout',signal:'brain body science',starve:'hungry empty plate',hoard:'food storage pantry',sugar:'sugar unhealthy food',sleep:'person sleeping bedroom',stress:'stressed person head',doctor:'doctor hospital clinic',diet:'healthy meal plate',metabolism:'body science scan',hormone:'lab science research',weight:'scale weighing body',energy:'energetic person morning'},
+  'Real Estate': {house:'house exterior real estate',home:'modern home interior',rent:'apartment building rent',mortgage:'house contract signing',buy:'house keys handover',property:'luxury property aerial',apartment:'apartment building city',agent:'real estate agent showing house',market:'housing market neighborhood',invest:'property investment building'},
+  'Motivation': {fail:'person falling struggle',succeed:'person celebrating success',dream:'person looking sunrise',hustle:'person working late night',rise:'sunrise mountain climb',fight:'boxer training gym',win:'winner crossing finish line',pain:'sweat effort workout',discipline:'early morning run',mindset:'person meditating focus',goal:'person writing goals notebook',limit:'person pushing weights gym'},
+  'Islamic': {pray:'muslim praying mosque',mosque:'mosque architecture',quran:'quran book pages',faith:'person praying peaceful',ramadan:'ramadan lantern night',mecca:'kaaba mecca',allah:'mosque minaret sky',dua:'hands raised prayer',fast:'iftar meal table',mercy:'sunrise peaceful sky'},
+  'Education': {learn:'student studying classroom',school:'school classroom students',book:'books library shelf',teacher:'teacher whiteboard classroom',exam:'student writing exam',study:'student desk studying night',university:'university campus students',knowledge:'library books reading',online:'online class laptop student'},
+  'Business': {team:'business team meeting office',ceo:'businessman office suit',strategy:'business meeting whiteboard',growth:'business growth chart office',startup:'startup team office',meeting:'business meeting boardroom',client:'handshake business deal',office:'modern office workspace',leader:'business leader speaking'},
+  'Fitness': {gym:'gym workout weights',run:'person running outdoor',muscle:'muscle flex gym',cardio:'treadmill running gym',lift:'weightlifting gym barbell',train:'personal trainer gym workout',sweat:'intense workout gym',strength:'strength training gym',body:'fit body athlete'},
+  'Food': {cook:'cooking kitchen chef',recipe:'ingredients kitchen counter',eat:'people eating table',meal:'plated meal restaurant',kitchen:'chef kitchen cooking',restaurant:'restaurant dining table',bake:'baking bread oven',fresh:'fresh vegetables market',spice:'spices market colorful'},
+  'Travel': {fly:'airplane sky travel',trip:'traveler suitcase airport',beach:'tropical beach ocean',city:'city skyline travel',explore:'traveler hiking mountain',hotel:'luxury hotel room',passport:'passport travel documents',adventure:'traveler backpack mountain',culture:'traditional street market'},
+  'Storytelling': {secret:'dark mysterious room',journey:'road path forest',hero:'silhouette person standing',shadow:'shadow silhouette dark',whisper:'candle dim light room',twist:'plot dramatic lighting',chapter:'old book pages',clock:'clock ticking close up',rain:'rain window night',fire:'fire flame close up',door:'old wooden door',mirror:'mirror reflection person',chase:'person running night street',letter:'handwritten letter old paper',diary:'old diary journal pages',footsteps:'footsteps walking path',heartbeat:'close up chest breathing',forest:'dark forest path fog',night:'night city street lights',revealed:'light reveal dark room'},
+  'Discovery:Space': {space:'galaxy stars nebula',planet:'planet earth from space',star:'night sky stars',universe:'galaxy space nebula',rocket:'rocket launch space',astronaut:'astronaut space walk',moon:'moon surface night sky',galaxy:'galaxy nebula stars',orbit:'earth orbit satellite',nasa:'rocket launch nasa'},
+  'Discovery:Ocean': {ocean:'deep ocean underwater',sea:'sea waves aerial',fish:'fish coral reef underwater',shark:'shark underwater ocean',dive:'scuba diver underwater',wave:'ocean waves crashing',coral:'coral reef underwater colorful',deep:'deep sea dark underwater',whale:'whale underwater ocean'},
+  'Discovery:Wildlife': {animal:'wild animal nature',lion:'lion savanna wildlife',predator:'predator hunting wildlife',jungle:'jungle rainforest animals',safari:'safari savanna animals',bird:'bird flying wildlife',elephant:'elephant savanna wildlife',forest:'forest animals wildlife'},
+  'Discovery:Nature': {mountain:'mountain landscape aerial',river:'river flowing nature',forest:'forest trees aerial',storm:'storm clouds nature',volcano:'volcano lava nature',desert:'desert dunes landscape',waterfall:'waterfall nature landscape',ice:'glacier ice landscape'},
+  'Discovery:History': {ancient:'ancient ruins history',war:'historical war archive',empire:'ancient empire ruins',king:'castle throne history',civilization:'ancient civilization ruins',battle:'historical battlefield',museum:'museum artifact history',medieval:'medieval castle history'},
+  'Discovery:Archaeology': {dig:'archaeology excavation dig site',ruin:'ancient ruins stone',artifact:'ancient artifact museum',tomb:'ancient tomb stone',fossil:'fossil dig excavation',pyramid:'pyramid ancient desert',excavate:'archaeologist digging site',relic:'ancient relic stone'},
+  'Discovery:Science': {experiment:'science lab experiment',lab:'science laboratory research',chemistry:'chemistry lab beaker',physics:'physics science research',research:'scientist lab research',microscope:'microscope lab science',dna:'dna science lab',discovery:'scientist research lab'},
+  'Discovery:Mystery': {crime:'crime scene tape night',murder:'dark investigation scene',detective:'detective investigation office',clue:'evidence investigation table',investigation:'police investigation scene',suspect:'dark interrogation room',mystery:'foggy dark street mystery',evidence:'evidence table investigation'},
+  'Discovery:DNA & Genetics': {dna:'dna helix science lab',gene:'genetics lab research',genome:'dna sequencing lab',mutation:'science lab research microscope',chromosome:'dna lab science closeup',evolution:'human evolution science',heredity:'family science research',clone:'science lab experiment',biology:'biology lab research',code:'dna code science lab'},
+  'Discovery:Ancient Civilizations': {pyramid:'ancient pyramid desert',empire:'ancient empire ruins',temple:'ancient temple ruins stone',hieroglyph:'egyptian hieroglyphs wall',pharaoh:'egyptian statue ancient',ruins:'ancient ruins stone',civilization:'ancient civilization ruins',artifact:'ancient artifact museum',myth:'ancient stone carving',legend:'ancient ruins mystery fog'},
+  'Discovery:Unexplained Phenomena': {ufo:'night sky lights mystery',alien:'space mystery lights stars',paranormal:'dark foggy forest mystery',ghost:'abandoned house dark hallway',mystery:'foggy dark unexplained',unexplained:'strange lights night sky',phenomenon:'mysterious sky lights night',legend:'old forest mystery fog',cryptid:'dark forest night fog',anomaly:'strange lights sky night'},
+  'Discovery:Rocket Launches': {rocket:'rocket launch space',launch:'rocket launch pad fire',engine:'rocket engine fire smoke',booster:'rocket booster launch',liftoff:'rocket liftoff smoke fire',spacex:'rocket launch night sky',countdown:'rocket launch pad night',orbit:'rocket space orbit earth'},
+  'Discovery:Astronauts & ISS': {astronaut:'astronaut space walk',spacewalk:'astronaut spacewalk space',station:'international space station orbit',iss:'space station orbit earth',crew:'astronaut crew space suit',gravity:'astronaut floating zero gravity',suit:'astronaut suit space closeup',orbit:'space station earth orbit'},
+  'Discovery:Mars & Rovers': {mars:'mars surface red planet',rover:'mars rover desert red',planet:'red planet mars surface',surface:'mars surface rocks dust',rock:'mars rover rock closeup',dust:'mars dust storm red',crater:'mars crater surface red',desert:'mars red desert landscape'},
+  'Discovery:Earth from Space': {earth:'earth from space blue',satellite:'satellite earth orbit view',atmosphere:'earth atmosphere space view',continent:'earth continent space view',ocean:'earth ocean space view blue',storm:'earth storm space view',night:'earth city lights space night',climate:'earth climate space view'},
+  'Discovery:Moon & Artemis': {moon:'moon surface night sky',lunar:'lunar surface craters gray',crater:'moon crater surface gray',apollo:'moon landing archive footage',astronaut:'astronaut moon surface walk',artemis:'moon mission space rocket',surface:'moon surface gray dust',landing:'moon landing dusty surface'},
+  'Discovery:Deep Space & Telescopes': {galaxy:'galaxy stars nebula deep space',telescope:'telescope observatory night sky',nebula:'nebula colorful deep space',star:'star field night sky deep',universe:'universe galaxy stars deep',observatory:'observatory telescope night dome',hubble:'deep space telescope image',cosmos:'cosmos galaxy stars deep'},
+  'War & Military History:World War I': {trench:'ww1 trench soldiers archive',soldier:'ww1 soldier uniform archive',battlefield:'ww1 battlefield archive smoke',infantry:'ww1 infantry marching archive',armistice:'ww1 memorial archive somber',artillery:'ww1 artillery cannon archive',uniform:'ww1 soldier uniform closeup',memorial:'war memorial somber stone'},
+  'War & Military History:World War II': {soldier:'ww2 soldier uniform archive',tank:'ww2 tank battlefield archive',invasion:'ww2 beach landing archive',bomber:'ww2 aircraft flying archive',battlefield:'ww2 battlefield smoke archive',navy:'ww2 navy ship ocean archive',victory:'ww2 victory parade archive',memorial:'war memorial somber stone flag'},
+  'War & Military History:Modern Warfare & Geopolitics': {military:'military parade convoy modern',geopolitics:'world map news tension',missile:'military base modern silo',conflict:'military convoy modern desert',diplomat:'world leaders meeting table',border:'military border checkpoint modern',news:'world map news broadcast',tension:'press conference tense modern'},
+  'War & Military History:Soldier Stories': {veteran:'veteran soldier portrait somber',soldier:'soldier portrait uniform somber',memorial:'veteran memorial wall somber',flag:'flag folding ceremony somber',letter:'old handwritten letter soldier',tribute:'veteran salute memorial somber',sacrifice:'war memorial candle somber',homecoming:'soldier family reunion emotional'},
+  'Natural Disasters:Hurricanes': {hurricane:'hurricane storm clouds aerial',storm:'storm clouds dark aerial',flood:'flood water street disaster',wind:'storm wind trees bending',rain:'heavy rain storm street',evacuation:'storm warning empty street',damage:'storm damage debris street',ocean:'storm waves ocean dark'},
+  'Natural Disasters:Earthquakes': {earthquake:'earthquake rubble street damage',rubble:'earthquake rubble damage street',collapse:'building collapse rubble dust',tremor:'earthquake damage street cracked',rescue:'rescue workers rubble disaster',damage:'earthquake damage building cracked',crack:'earthquake crack ground street',debris:'earthquake debris street damage'},
+  'Natural Disasters:Volcanoes': {volcano:'volcano lava eruption night',lava:'lava flow volcano night red',eruption:'volcano eruption smoke ash',ash:'volcano ash cloud sky',magma:'lava magma flow closeup',smoke:'volcano smoke ash sky dark',crater:'volcano crater smoke red',mountain:'volcano mountain eruption smoke'},
+  'Natural Disasters:Tornadoes': {tornado:'tornado funnel storm field',funnel:'tornado funnel dark sky',storm:'storm clouds dark tornado',debris:'tornado debris field damage',sky:'dark storm sky tornado green',wind:'tornado wind debris field',damage:'tornado damage house debris',warning:'storm warning siren dark sky'},
+  'Natural Disasters:Tsunamis': {tsunami:'tsunami wave ocean aerial',wave:'giant wave ocean aerial',flood:'coastal flood water street',ocean:'ocean wave crashing aerial',coast:'coastal town wave aerial',warning:'tsunami warning empty beach',damage:'coastal damage flood debris',evacuation:'coastal evacuation empty street'},
+  'Luxury Lifestyle': {mansion:'luxury mansion interior pool',yacht:'luxury yacht ocean sunset',supercar:'supercar luxury road night',jet:'private jet airport luxury',jewelry:'luxury jewelry diamond closeup',penthouse:'penthouse view city night',wealth:'luxury lifestyle money watch',champagne:'champagne luxury party closeup'},
+  'Fashion & Style': {runway:'fashion runway show lights',model:'fashion model walking runway',designer:'fashion designer studio fabric',outfit:'fashion outfit closeup style',style:'street style fashion closeup',fabric:'fashion fabric texture closeup',boutique:'fashion boutique store interior',trend:'fashion model street style'},
+  'News & Current Affairs': {news:'news studio broadcast desk',journalist:'journalist reporting microphone street',press:'press conference microphones podium',broadcast:'news broadcast studio camera',government:'government building flag exterior',conference:'press conference podium microphones',report:'journalist notebook reporting street',flag:'flag building government exterior'},
+  'ASMR & Relaxation': {rain:'rain window cozy calm',candle:'candle flame cozy closeup',whisper:'cozy quiet room soft light',cozy:'cozy blanket warm light room',water:'water pouring closeup calm',soft:'soft light calm room cozy',calm:'calm peaceful room soft light',tea:'tea cup steam cozy closeup'},
+  'Crypto & Investing': {crypto:'cryptocurrency bitcoin coin closeup',bitcoin:'bitcoin coin closeup screen',blockchain:'blockchain digital network screen',invest:'stock market chart screen',trading:'trading screen chart closeup',wallet:'crypto wallet phone screen',market:'crypto market chart screen red',coin:'crypto coin closeup golden'},
+  'Celebrity': {carpet:'red carpet event flash',paparazzi:'camera flash night event',fame:'spotlight stage lights',fashion:'fashion runway show lights',awards:'awards show stage lights',interview:'microphone interview studio',scandal:'tabloid magazine stack',luxury:'luxury car mansion lifestyle',mansion:'luxury mansion interior',jet:'private jet airport luxury',magazine:'tabloid magazine stand',spotlight:'stage spotlight lights'},
+  'True Crime': {crime:'crime scene tape night',murder:'dark investigation night street',detective:'detective office investigation',suspect:'interrogation room dark',evidence:'evidence table investigation lab',police:'police car night lights',court:'courtroom trial gavel',prison:'prison bars jail hallway',investigation:'police investigation scene night',victim:'crime scene dark street tape',forensic:'forensic lab evidence closeup',handcuff:'handcuffs arrest police night'},
+  'Parenting': {baby:'baby parent home care',child:'child playing family home',mom:'mother child home bonding',dad:'father child playing home',toddler:'toddler playing home floor',family:'family home living room',newborn:'newborn baby hospital care',parenting:'parent child bonding home',school:'child school backpack morning',discipline:'parent talking child home'},
+  'Pets & Animals': {dog:'dog playing park outdoor',cat:'cat home playful window',puppy:'puppy playing outdoor grass',kitten:'kitten playful home indoor',pet:'pet owner home bonding',vet:'veterinarian clinic animal care',rescue:'animal shelter rescue care',training:'dog training outdoor park',bird:'pet bird cage home',aquarium:'fish tank aquarium home'},
+  'Gaming': {game:'gaming setup controller rgb',gamer:'person gaming headset screen',console:'gaming console controller closeup',esports:'esports arena gaming crowd',pc:'gaming pc setup rgb lights',controller:'gamepad controller closeup hands',stream:'streaming setup gaming desk',level:'video game screen gameplay',arcade:'arcade gaming lights retro',virtual:'vr headset gaming person'},
+  'Sports': {match:'sports stadium match crowd',team:'sports team field huddle',goal:'soccer goal celebration field',player:'athlete sports action motion',stadium:'stadium crowd sports lights',training:'athlete training gym field',championship:'trophy championship sports stage',race:'runner race track motion',ball:'sports ball field action closeup',coach:'coach sports field training'},
+  'Beauty & Skincare': {skin:'skincare routine face closeup',makeup:'makeup application beauty mirror',beauty:'beauty product cosmetics table',routine:'skincare bathroom routine morning',cosmetic:'cosmetics beauty products flatlay',hair:'hair styling salon closeup',spa:'spa relaxation beauty candles',glow:'skincare glowing skin face',salon:'beauty salon styling chair',serum:'skincare bottle product closeup'},
+  'DIY & Home': {renovate:'home renovation tools workspace',build:'diy building tools workshop',tool:'tools workshop diy bench',paint:'painting wall home diy roller',furniture:'furniture building woodwork shop',garden:'garden diy backyard tools',repair:'home repair tools closeup',craft:'diy craft table hands closeup',workshop:'diy workshop tools bench wood',design:'home interior design diy room'},
+  'Automotive': {car:'car driving road sunset',engine:'car engine mechanic closeup',drive:'driving road car interior',repair:'mechanic garage car repair',race:'race car track speed motion',mechanic:'mechanic garage car repair tools',road:'road trip car driving highway',speed:'car speed motion blur road',wheel:'car wheel closeup detail chrome',garage:'car garage mechanic workshop'},
+  'Psychology / Self-Improvement': {mind:'person thinking reflection window',therapy:'therapy session counseling room',anxiety:'person stressed alone thinking',habit:'person journaling morning routine',mindset:'person meditating focus calm',emotion:'person emotional reflection quiet',brain:'brain science mental health scan',trauma:'person alone quiet reflection window',growth:'person journaling growth reflection',focus:'person meditating calm focus room'},
+  'Stoicism': {virtue:'ancient marble statue calm',control:'person calm still storm',adversity:'person standing storm calm',discipline:'early morning solitude routine',wisdom:'ancient philosopher statue library',journal:'journal writing candle desk',silence:'quiet solitude nature calm',mortality:'candle burning quiet dark',philosopher:'marble statue ancient library',calm:'person calm still nature',emperor:'roman statue ancient ruins',reflection:'person alone quiet window thinking',storm:'person standing storm calm mountain',solitude:'lone figure mountain quiet'},
+  'Relationships': {couple:'couple romantic walking sunset',love:'couple holding hands romantic',dating:'couple dinner date romantic candlelight',breakup:'person alone sad window',marriage:'couple wedding romantic ceremony',trust:'couple talking serious conversation',argument:'couple serious conversation tense home',romance:'couple sunset romantic walk beach',wedding:'wedding couple romantic ceremony',heartbreak:'person alone sad quiet window'},
+  'Spirituality & Meditation': {meditate:'person meditating peaceful nature',spiritual:'person meditating sunrise peaceful',yoga:'yoga pose peaceful outdoor nature',energy:'peaceful nature sunrise calm light',soul:'person meditating quiet peaceful room',chakra:'meditation peaceful candle incense',mindfulness:'person meditating calm nature outdoor',universe:'starry sky peaceful meditation night',peace:'peaceful nature sunrise calm water',healing:'meditation peaceful nature calm light'},
+};
+function dictKeyFor(){ return SUBNICHES[niche] ? (niche+':'+subniche) : niche; }
+function dictFor(){ return DICTS[dictKeyFor()] || DICTS[niche] || {}; }
+
+/* extra filler words common in spoken scripts, beyond generic stopwords */
+const STOPWORDS = new Set(("the a an and or but if is are was were be been being to of in on at for with by from as it its it's this that these those you your yours we our us they them their he she his her i my me not no nor so than then too very can will just don t s re ve ll d m about into over under again further once here there when where why how all each few more most other some such only own same ever every right now nobody something anything everything really actually basically literally gonna wanna kind sort thing things lot lots like just okay well".split(' ')));
+
+function splitSentences(text){ return text.replace(/\n+/g,' ').split(/(?<=[.!?])\s+/).map(s=>s.trim()).filter(Boolean); }
+function groupSentences(sentences, n){ const groups=[]; for(let i=0;i<sentences.length;i+=n){ groups.push(sentences.slice(i,i+n).join(' ')); } return groups; }
+
+function extractKeywords(text){
+  const dict = dictFor();
+  const words = text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(Boolean);
+  const boosted = [];
+  const generic = [];
+  for (const w of words){
+    if (STOPWORDS.has(w) || w.length<3) continue;
+    if (dict[w] && dict[w].length){
+      dict[w].split(' ').forEach(p=>{ if(!boosted.includes(p)) boosted.push(p); });
+    } else {
+      if(!generic.includes(w)) generic.push(w);
+    }
+  }
+  generic.sort((a,b)=>b.length-a.length);
+  const final = [...boosted.slice(0,3), ...generic.slice(0,2)];
+  return final.slice(0,4);
+}
+
+/* ---------- ESTIMATE / RATE WARNING ---------- */
+function updateEstimate(){
+  const n = parseInt(document.getElementById('sentGroup').value,10);
+  const text = document.getElementById('script').value;
+  const sentences = splitSentences(text);
+  const count = sentences.length ? Math.ceil(sentences.length/n) : 0;
+  document.getElementById('estCount').textContent = count;
+  const warn = document.getElementById('rateWarn');
+  if (count > 180) {
+    warn.style.display = 'block';
+    warn.textContent = `⚠ ${count} requests may exceed the free Pexels hourly limit (~200/hr). The tool will auto-pause and let you resume if that happens — nothing already fetched is lost.`;
+  } else { warn.style.display = 'none'; }
+}
+document.getElementById('script').addEventListener('input', updateEstimate);
+document.getElementById('sentGroup').addEventListener('change', updateEstimate);
+
+const logEl = document.getElementById('consoleLog');
+function log(msg, cls){ const d=document.createElement('div'); if(cls) d.className=cls; d.textContent=msg; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; }
+function setStep(i){ for(let s=0;s<4;s++){ document.getElementById('step'+s).classList.toggle('done', s<=i); } document.getElementById('railFill').style.width = ((i+1)/4*100)+'%'; }
+
+let collected = [];
+let queryCache = new Map();
+let pendingQueries = [];
+let pendingIndex = 0;
+let failedIndices = [];
+
+async function fetchPexels(query, quality){
+  const res = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`, { headers: { Authorization: apiKey } });
+  if (res.status === 429) return { rateLimited:true };
+  if (!res.ok) return null;
+  const data = await res.json();
+  const video = data.videos && data.videos[0];
+  if (!video) return null;
+  const file = video.video_files.find(f=>f.quality===quality) || video.video_files[0];
+  return { image: video.image, link: file.link };
+}
+async function fetchPixabay(query){
+  if (!pixKey) return null;
+  const res = await fetch(`https://pixabay.com/api/videos/?key=${pixKey}&q=${encodeURIComponent(query)}&per_page=3`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const hit = data.hits && data.hits[0];
+  if (!hit) return null;
+  const file = hit.videos.medium || hit.videos.small || hit.videos.large;
+  return { image: `https://i.vimeocdn.com/video/${hit.picture_id}_640x360.jpg`, link: file.url };
+}
+const NASA_SUBNICHES = new Set(['Rocket Launches','Astronauts & ISS','Mars & Rovers','Earth from Space','Moon & Artemis','Deep Space & Telescopes']);
+/* NASA Media Library — free, no API key required, public domain content.
+   Best for space/astronomy footage; used as an automatic extra fallback. */
+async function fetchNasa(query){
+  try {
+    const searchRes = await fetch(`https://images-api.nasa.gov/search?q=${encodeURIComponent(query)}&media_type=video`);
+    if (!searchRes.ok) return null;
+    const data = await searchRes.json();
+    const item = data.collection && data.collection.items && data.collection.items[0];
+    if (!item) return null;
+    const manifestRes = await fetch(item.href);
+    if (!manifestRes.ok) return null;
+    const files = await manifestRes.json();
+    const mp4 = files.find(f => typeof f === 'string' && f.endsWith('.mp4') && !f.includes('~orig'));
+    if (!mp4) return null;
+    const thumb = item.links && item.links[0] && item.links[0].href;
+    return { image: thumb || '', link: mp4 };
+  } catch(err){ return null; }
+}
+
+/* ---------- MUSIC (Jamendo) ----------
+   Jamendo has a real public search API (api.jamendo.com/v3.0/tracks) with a
+   'tags' parameter and Creative Commons licensed audio + direct download URLs.
+   Pixabay does NOT expose a music search API (only images/videos), so it is
+   not used here — using it for music would just silently fail. */
+const NICHE_MOOD = {
+  'Finance':'corporate','Crypto & Investing':'corporate energetic','Business':'corporate',
+  'Tech / AI':'corporate cinematic','Health':'calm ambient','Fitness':'energetic upbeat',
+  'Motivation':'uplifting inspiring','Real Estate':'corporate calm','Islamic':'calm ambient',
+  'Education':'corporate calm','Food':'lofi chill','Travel':'uplifting cinematic',
+  'Discovery':'cinematic epic','Storytelling':'emotional cinematic','Celebrity':'energetic upbeat',
+  'True Crime':'dark suspense','Parenting':'calm ambient','Pets & Animals':'lofi chill',
+  'Gaming':'energetic upbeat','Sports':'energetic upbeat','Beauty & Skincare':'lofi chill',
+  'DIY & Home':'lofi chill','Automotive':'energetic cinematic','Psychology / Self-Improvement':'calm ambient',
+  'Stoicism':'cinematic calm','Relationships':'emotional sad','Spirituality & Meditation':'calm ambient',
+  'War & Military History':'dark cinematic epic','Natural Disasters':'dark suspense cinematic',
+  'Luxury Lifestyle':'corporate cinematic','Fashion & Style':'energetic upbeat',
+  'News & Current Affairs':'corporate','ASMR & Relaxation':'calm ambient','General':'cinematic calm'
+};
+function moodQueryFor(){
+  const override = document.getElementById('moodOverride').value;
+  if (override && override !== 'auto') return override;
+  return NICHE_MOOD[niche] || 'cinematic calm';
+}
+async function fetchJamendoTracks(tagQuery, count){
+  if (!jamKey) return [];
+  const res = await fetch(`https://api.jamendo.com/v3.0/tracks/?client_id=${encodeURIComponent(jamKey)}&format=json&limit=${count}&tags=${encodeURIComponent(tagQuery)}&audioformat=mp32&include=musicinfo`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  if (!data.results) return [];
+  return data.results.map(t => ({
+    name: t.name, artist: t.artist_name, license: t.license_ccurl,
+    url: t.audiodownload || t.audio
+  })).filter(t => t.url);
+}
+
+function runPipelineSetup(){
+  const scriptText = document.getElementById('script').value.trim();
+  const n = parseInt(document.getElementById('sentGroup').value,10);
+  const title = document.getElementById('videoTitle').value.trim();
+  const sentences = splitSentences(scriptText);
+  const groups = groupSentences(sentences, n);
+  return groups.map(g=>{
+    const kws = extractKeywords(g);
+    const query = [SUBNICHES[niche]?subniche:niche, title, ...kws].filter(Boolean).join(' ').trim();
+    return { text:g, keywords:kws, query: query || niche };
+  });
+}
+
+async function runFetchLoop(startIndex){
+  const quality = document.getElementById('quality').value;
+  const scenesGrid = document.getElementById('scenesGrid');
+  let ready = collected.length;
+  document.getElementById('resumeBtn').style.display = 'none';
+
+  for (let i=startIndex;i<pendingQueries.length;i++){
+    const q = pendingQueries[i];
+    const sceneNum = String(i+1).padStart(2,'0');
+    const cacheKey = q.query;
+    try {
+      let result = queryCache.has(cacheKey) ? queryCache.get(cacheKey) : await fetchPexels(q.query, quality);
+      if (result && result.rateLimited){
+        log(`Pexels hourly free-tier limit reached at scene ${sceneNum}. Fetched so far is safe.`, 'tag');
+        pendingIndex = i;
+        document.getElementById('resumeBtn').style.display = 'block';
+        document.getElementById('collectBtn').disabled = false;
+        return;
+      }
+      if (!result && pixKey) result = await fetchPixabay(q.query);
+      if (!result && niche==='Discovery' && NASA_SUBNICHES.has(subniche)) result = await fetchNasa(q.query);
+      if (!result){
+        log(`[${sceneNum}/${pendingQueries.length}] no match for "${q.query}"`);
+        continue;
+      }
+      queryCache.set(cacheKey, result);
+      collected.push({ num: sceneNum, image: result.image, link: result.link, keywords: q.keywords.join(' ') });
+      ready++;
+      log(`[${sceneNum}/${pendingQueries.length}] ${q.keywords.join(' ')} matched`, 'ok');
+      const div = document.createElement('div');
+      div.className = 'scene';
+      div.innerHTML = `<img src="${result.image}" loading="lazy"><div class="meta"><div class="sc-num">SCENE ${sceneNum}</div><div class="kw">${q.keywords.join(' ')}</div><a class="dl" href="${result.link}" target="_blank" download>↓ download</a></div>`;
+      scenesGrid.appendChild(div);
+    } catch(err){
+      log(`[${sceneNum}/${pendingQueries.length}] error: ${err.message}`, 'tag');
+      if (!failedIndices.includes(i)) failedIndices.push(i);
+    }
+    await new Promise(r=>setTimeout(r, 220));
+  }
+  setStep(3);
+  log(`Done. ${ready}/${pendingQueries.length} clips ready.`, 'ok');
+  document.getElementById('resultsMeta').textContent = `${ready} clips`;
+  document.getElementById('resultsCard').style.display = 'block';
+  if (ready === 0) scenesGrid.innerHTML = '<div class="empty-note">No clips matched. Try a broader script or different niche.</div>';
+  document.getElementById('collectBtn').disabled = false;
+  document.getElementById('retryFailedBtn').style.display = failedIndices.length ? 'block' : 'none';
+  if (failedIndices.length) log(`${failedIndices.length} scene(s) hit a network error — use "Retry failed scenes" to try just those again.`, 'tag');
+}
+
+document.getElementById('collectBtn').onclick = async () => {
+  logEl.innerHTML = '';
+  if (!apiKey || apiKey.length < 10){ log('✗ Submit a valid Pexels API key first (it\'s free — see link above).', 'tag'); return; }
+  const scriptText = document.getElementById('script').value.trim();
+  if (!scriptText){ log('✗ Paste a script first.', 'tag'); return; }
+
+  document.getElementById('pipelineCard').style.display = 'block';
+  document.getElementById('resultsCard').style.display = 'none';
+  document.getElementById('collectBtn').disabled = true;
+  collected = []; queryCache = new Map(); failedIndices = [];
+  document.getElementById('scenesGrid').innerHTML = '';
+  document.getElementById('retryFailedBtn').style.display = 'none';
+
+  setStep(0);
+  pendingQueries = runPipelineSetup();
+  const nicheLabel = SUBNICHES[niche] ? (niche+': '+subniche) : niche;
+  document.getElementById('pipelineMeta').textContent = `${pendingQueries.length} segments · ${nicheLabel}`;
+  log(`Split script into ${pendingQueries.length} segments.`);
+  await new Promise(r=>setTimeout(r,200));
+  setStep(1);
+  log(`Extracted keywords for ${pendingQueries.length} segments using ${nicheLabel} visual dictionary.`);
+  await new Promise(r=>setTimeout(r,200));
+  setStep(2);
+  await runFetchLoop(0);
+};
+
+document.getElementById('resumeBtn').onclick = async () => {
+  document.getElementById('collectBtn').disabled = true;
+  log(`Resuming from scene ${String(pendingIndex+1).padStart(2,'0')}...`);
+  await runFetchLoop(pendingIndex);
+};
+
+document.getElementById('retryFailedBtn').onclick = async () => {
+  const quality = document.getElementById('quality').value;
+  const scenesGrid = document.getElementById('scenesGrid');
+  const toRetry = [...failedIndices];
+  failedIndices = [];
+  document.getElementById('retryFailedBtn').style.display = 'none';
+  document.getElementById('collectBtn').disabled = true;
+  log(`Retrying ${toRetry.length} failed scene(s)...`);
+  for (const i of toRetry){
+    const q = pendingQueries[i];
+    const sceneNum = String(i+1).padStart(2,'0');
+    try {
+      let result = queryCache.has(q.query) ? queryCache.get(q.query) : await fetchPexels(q.query, quality);
+      if (result && result.rateLimited){
+        log(`Still rate-limited at scene ${sceneNum} — wait a bit before retrying again.`, 'tag');
+        failedIndices.push(i);
+        continue;
+      }
+      if (!result && pixKey) result = await fetchPixabay(q.query);
+      if (!result && niche==='Discovery' && NASA_SUBNICHES.has(subniche)) result = await fetchNasa(q.query);
+      if (!result){ log(`[${sceneNum}] still no match for "${q.query}"`); continue; }
+      queryCache.set(q.query, result);
+      collected.push({ num: sceneNum, image: result.image, link: result.link, keywords: q.keywords.join(' ') });
+      log(`[${sceneNum}] ${q.keywords.join(' ')} matched on retry`, 'ok');
+      const div = document.createElement('div');
+      div.className = 'scene';
+      div.innerHTML = `<img src="${result.image}" loading="lazy"><div class="meta"><div class="sc-num">SCENE ${sceneNum}</div><div class="kw">${q.keywords.join(' ')}</div><a class="dl" href="${result.link}" target="_blank" download>↓ download</a></div>`;
+      scenesGrid.appendChild(div);
+    } catch(err){
+      log(`[${sceneNum}] still failing: ${err.message}`, 'tag');
+      failedIndices.push(i);
+    }
+    await new Promise(r=>setTimeout(r, 220));
+  }
+  document.getElementById('resultsMeta').textContent = `${collected.length} clips`;
+  document.getElementById('collectBtn').disabled = false;
+  document.getElementById('retryFailedBtn').style.display = failedIndices.length ? 'block' : 'none';
+  log(`Retry done. ${collected.length}/${pendingQueries.length} total clips ready.`, 'ok');
+};
+
+document.getElementById('zipBtn').onclick = async () => {
+  if (!collected.length) return;
+  const btn = document.getElementById('zipBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Packing...'; btn.disabled = true;
+  const zip = new JSZip();
+  let packed = 0;
+  for (const scene of collected){
+    try {
+      log(`Packing scene_${scene.num}.mp4 ...`);
+      const resp = await fetch(scene.link);
+      const blob = await resp.blob();
+      zip.file(`scene_${scene.num}.mp4`, blob);
+      packed++;
+    } catch(err){
+      log(`Could not bundle scene_${scene.num}.mp4 (CORS) — use its direct link instead.`, 'tag');
+      zip.file(`scene_${scene.num}_LINK.txt`, scene.link);
+    }
+  }
+
+  const wantsMusic = document.getElementById('includeMusic').checked;
+  if (wantsMusic){
+    if (!jamKey){
+      log('Music skipped — no Jamendo Client ID entered.', 'tag');
+    } else {
+      const count = parseInt(document.getElementById('musicCount').value, 10);
+      const mood = moodQueryFor();
+      log(`Searching Jamendo for "${mood}" mood music...`);
+      try {
+        const tracks = await fetchJamendoTracks(mood, count);
+        if (!tracks.length){
+          log('No Jamendo tracks matched that mood — try a different one.', 'tag');
+        } else {
+          const creditsLines = [];
+          for (let i=0;i<tracks.length;i++){
+            const t = tracks[i];
+            const num = String(i+1).padStart(2,'0');
+            try {
+              const resp = await fetch(t.url);
+              const blob = await resp.blob();
+              zip.file(`music/track_${num}.mp3`, blob);
+              creditsLines.push(`track_${num}.mp3 — "${t.name}" by ${t.artist} — ${t.license || 'Jamendo license'}`);
+              log(`Packed music/track_${num}.mp3 ("${t.name}" by ${t.artist})`, 'ok');
+            } catch(err){
+              creditsLines.push(`track_${num} — "${t.name}" by ${t.artist} — could not bundle (CORS), direct link: ${t.url}`);
+              log(`Could not bundle track_${num}.mp3 (CORS) — link saved in credits file instead.`, 'tag');
+            }
+          }
+          zip.file('music/CREDITS.txt', creditsLines.join('\n') + '\n\nTracks via Jamendo (jamendo.com), Creative Commons licensed. Keep this file if you use the tracks, per Jamendo\'s license terms.');
+        }
+      } catch(err){
+        log(`Jamendo request failed: ${err.message}`, 'tag');
+      }
+    }
+  }
+
+  const zipBlob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = 'broll_bundle.zip';
+  a.click();
+  log(`ZIP built — ${packed}/${collected.length} clips bundled as video files.`, 'ok');
+  btn.textContent = original; btn.disabled = false;
+};
+</script>
+</body>
+</html>
